@@ -29,7 +29,13 @@ BLACK = (0,0,0)
 MARGIN = 1
 
 TileSize = 16
-ScreenSize = 800
+ScreenSize = 650
+
+MainGrid = []
+
+Islands = []
+
+tiles = 100
 
 # WORLD
 
@@ -47,6 +53,8 @@ pygame.display.set_caption("loading")
 
 SPRITESHEET = pygame.image.load("SPRITESHEET.png").convert()
 ColorKey = (255,0,255)
+
+CHARACTERSHEET = pygame.image.load("CHAR.png").convert()
 
 SPRITES = {
     "Ocean1": (0,0),
@@ -69,14 +77,50 @@ SPRITES = {
 
 # CLASSES
 
-class Character():
-    def __init__(self,name,HP):
-        self.Player = False
+class Character(pygame.sprite.Sprite):
+    def __init__(self,name,HP,Player,Pos):
+        super().__init__()
+        self.Player = Player
         self.Name = name
         self.HP = HP or 20
         self.CurrentHP = self.HP
         self.MovementVector = (0,0)
-        self.MaximumSpeed = 3
+        self.MaximumSpeed = 1.5
+        self.Position = Pos
+        self.CameraOffset = (0,0)
+
+        self.image = pygame.Surface([TileSize,TileSize])
+        self.image.blit(CHARACTERSHEET,(0,0),(0,0,TileSize,TileSize))
+        self.image.set_colorkey(ColorKey)
+
+        self.rect = self.image.get_rect()
+        self.rect.x = self.Position[0]
+        self.rect.y = self.Position[1]
+
+    def update(self,GlobalOffset):
+
+        if self.Player:
+
+            Multi = 1
+
+            if self.MovementVector[0] != 0 and self.MovementVector[1] != 0:
+                Multi = math.pi/4
+
+            self.Position = (self.Position[0]+self.MovementVector[0]*Multi,self.Position[1]+self.MovementVector[1]*Multi)
+
+            if self.Position[0] <= 0:
+                self.Position = (0,self.Position[1])
+            if self.Position[1] <= 0:
+                self.Position = (self.Position[0],0)
+
+            if self.Position[0] >= TileSize*(tiles-1):
+                self.Position = (TileSize*(tiles-1),self.Position[1])
+                
+            if self.Position[1] >= TileSize*(tiles-1):
+                self.Position = (self.Position[0],TileSize*(tiles-1))
+            
+            self.rect.x = self.Position[0] - GlobalOffset[0]
+            self.rect.y = self.Position[1] - GlobalOffset[1]
 
 class Tile(pygame.sprite.Sprite):
     def __init__(self,x,y,GridCoord,Color,SpriteValue,Type,SPRITE):
@@ -97,6 +141,8 @@ class Tile(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.x = self.Position[0]
         self.rect.y = self.Position[1]
+
+        self.images = [self.image]
         
         #pygame.draw.rect(self.image,Color,[0,0,TileSize,TileSize])
 
@@ -104,9 +150,19 @@ class Tile(pygame.sprite.Sprite):
         self.rect.x = self.Position[0] - GlobalOffset[0]
         self.rect.y = self.Position[1] - GlobalOffset[1]
 
-    def ResetTexture(self,SPVAL):
-        self.image.blit(SPRITESHEET,(0,0),(SPVAL[0],SPVAL[1],TileSize,TileSize))
+    def ResetTexture(self,SPVALT):
 
+        c = 0
+        for image in self.images:
+            image = image.blit(SPRITESHEET,(0,0),(SPVALT[c][0],SPVALT[c][1],TileSize,TileSize))
+            SPVALT.pop(c)
+            c += 1
+        
+        for SPVAL in SPVALT:
+            img = pygame.Surface([TileSize,TileSize])
+            #img.blit(SPRITESHEET,(0,0),(SPVAL[0],SPVAL[1],TileSize,TileSize))
+            #self.images.append(img)
+            
 class Decoration(pygame.sprite.Sprite):
     def __init__(self,x,y,GridCoord,SpriteValue,Type,Sprite):
         super().__init__()
@@ -132,9 +188,12 @@ class Decoration(pygame.sprite.Sprite):
     def update(self,GlobalOffset):
         self.rect.x = self.Position[0] - GlobalOffset[0]
         self.rect.y = self.Position[1] - GlobalOffset[1]
+        
 # LISTS
 
 TileList = pygame.sprite.Group()
+TotalList = pygame.sprite.Group()
+CharacterList = pygame.sprite.Group()
 
 # pygame
 
@@ -144,12 +203,6 @@ done = False
 clock = pygame.time.Clock()
 
 # CREATING GRID
-
-MainGrid = []
-
-Islands = []
-
-tiles = 100#int(ScreenSize/TileSize)
 
 for row in range(tiles):
     MainGrid.append([])
@@ -166,11 +219,11 @@ for row in range(tiles):
         SpriteType = "Water"
         Sprite = None
         
-        if NOISE <= .5:
+        if NOISE <= .535:
             Color = (0,0,255)
             SpriteValue = SPRITES["Ocean"+str(random.randrange(1,3))]
             Sprite = "Water"
-        elif NOISE <= .57:
+        elif NOISE <= .575:
             SpriteType = "Land"
             Color = (255,255,0)
             SpriteValue = SPRITES["Sand"+str(random.randrange(1,3))]
@@ -189,6 +242,7 @@ for row in range(tiles):
         NewTile = Tile(row*TileSize,column*TileSize,(row,column),Color,SpriteValue,SpriteType,Sprite)
         MainGrid[row].append([NewTile,[]])
         TileList.add(NewTile)
+        TotalList.add(NewTile)
 
 def PartOfIsland(coord):
 
@@ -261,52 +315,98 @@ for row in range(len(MainGrid)):
             if FN > .55 and random.randrange(1,8) < 7:
                 Tree = Decoration(Tile.Position[0],Tile.Position[1],(row,column),SPRITES["Tree"+str(random.randrange(1,4))],"Decoration","Tree")
                 TileList.add(Tree)
+                TotalList.add(Tree)
                 Decorations.append(Tree)
             elif random.randrange(1,30) == 1:
                 Flower = Decoration(Tile.Position[0],Tile.Position[1],(row,column),SPRITES["Flower"+str(random.randrange(1,5))],"Decoration","Flower")
                 TileList.add(Flower)
+                TotalList.add(Flower)
                 Decorations.append(Flower)
+
+'''
+def SmoothEdges(tile):
+    TileCoordinates = tile.GridCoordinate
+
+    if TileCoordinates[0] + 1 >= len(MainGrid) or TileCoordinates[0] - 1 < 0:
+        return
+    if TileCoordinates[1] + 1 >= len(MainGrid[0]) or TileCoordinates[1] - 1 < 0:
+        return
+
+    if tile.Tile == "Grass":
+        if MainGrid[TileCoordinates[0]+1][TileCoordinates[1]][0].Tile != "Grass":
+            tile.ResetTexture([SPRITES["Sand1"],(17*2,17)])
+
+for row in range(len(MainGrid)):
+    for column in range(len(MainGrid[row])):
+        Tile = MainGrid[row][column][0]
+
+        SmoothEdges(Tile)
+'''
+
 # PLAYER
 
-Player = Character("Player",20)
+CTSOffset = ScreenSize/2-16 #character to screen offset
+
+Player = Character("Player",20,True,(CTSOffset,CTSOffset))
+TotalList.add(Player)
+
+SetPlayerPos = False
+
+'''
+while not SetPlayerPos:
+    RandomTile = MainGrid[random.randrange(0,100)][random.randrange(0,100)][0]
+
+    if RandomTile.SpriteType != "Water":
+        SetPlayerPos = True
+        Player.Position = RandomTile.Position
+'''
 
 # main program loop
 
 while not done:
+
+    PMS = Player.MaximumSpeed #player movement speed, i just didnt want code lines to be too long
+    
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             done = True
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_d:
-                CameraMovement = (3,CameraMovement[1])
+                Player.MovementVector = (PMS,Player.MovementVector[1])
             elif event.key == pygame.K_a:
-                CameraMovement = (-3,CameraMovement[1])
+                Player.MovementVector = (-PMS,Player.MovementVector[1])
             elif event.key == pygame.K_w:
-                CameraMovement = (CameraMovement[0],-3)
+                Player.MovementVector = (Player.MovementVector[0],-PMS)
             elif event.key == pygame.K_s:
-                CameraMovement = (CameraMovement[0],3)
+                Player.MovementVector = (Player.MovementVector[0],PMS)
         elif event.type == pygame.KEYUP:
             if event.key == pygame.K_a or event.key == pygame.K_d:
-                CameraMovement = (0,CameraMovement[1])
+                Player.MovementVector = (0,Player.MovementVector[1])
             if event.key == pygame.K_s or event.key == pygame.K_w:
-                CameraMovement = (CameraMovement[0],0)
+                Player.MovementVector = (Player.MovementVector[0],0)
 
     r = 0
 
-    CameraOffset = (CameraOffset[0]+CameraMovement[0],CameraOffset[1]+CameraMovement[1])
+    Multi = 1
+
+    if Player.MovementVector[0] != 0 and Player.MovementVector[1] != 0:
+        Multi = math.pi/4
+
+    CameraOffset = (CameraOffset[0]+Player.MovementVector[0]*Multi,CameraOffset[1]+Player.MovementVector[1]*Multi)
 
     if CameraOffset[0] < 0:
         CameraOffset = (0,CameraOffset[1])
-    elif CameraOffset[0] > tiles * TileSize - ScreenSize:
+         
+    elif CameraOffset[0] >= tiles * TileSize - ScreenSize:
         CameraOffset = (tiles * TileSize - ScreenSize, CameraOffset[1])
 
-    if CameraOffset[1] < 0:
+    if CameraOffset[1] <= 0:
         CameraOffset = (CameraOffset[0],0)
-    elif CameraOffset[1] > tiles * TileSize - ScreenSize:
+    elif CameraOffset[1] >= tiles * TileSize - ScreenSize:
         CameraOffset = (CameraOffset[0],tiles * TileSize - ScreenSize)
 
-    TileList.update(CameraOffset)
-    TileList.draw(screen)
+    TotalList.update(CameraOffset)
+    TotalList.draw(screen)
     
     for row in MainGrid:
         c = 0
