@@ -8,7 +8,11 @@ sys.setrecursionlimit(10000)
 
 from perlin_noise import PerlinNoise
 
-RandomSeed = 1
+CoolSeeds = [301]
+
+RandomSeed = random.randrange(1,1000000)
+
+print("Seed:",RandomSeed)
 
 random.seed(RandomSeed)
 
@@ -18,6 +22,8 @@ noise3 = PerlinNoise(12,RandomSeed)
 noise4 = PerlinNoise(16,RandomSeed)
 
 ForestNoise = PerlinNoise(30,RandomSeed*math.pi)
+
+RiverNoise = PerlinNoise(3,RandomSeed*math.pi**2)
 
 # COLORS
 
@@ -212,6 +218,17 @@ for row in range(tiles):
         NOISE += .25 * noise3([column/100,row/100])
         NOISE += .125 * noise4([column/100,row/100])
 
+        '''
+        RN = RiverNoise([column/100,row/100])
+
+        if RN > -0.02 and RN < 0.02:
+            RN = 1 - RN * 10
+        else:
+            RN = 0
+        
+        NOISE -= RN
+        '''
+        
         NOISE = (NOISE + 1) / 2
         
         Color = (255 * NOISE,255 * NOISE,255 * NOISE)
@@ -352,14 +369,15 @@ TotalList.add(Player)
 
 SetPlayerPos = False
 
-'''
+
 while not SetPlayerPos:
-    RandomTile = MainGrid[random.randrange(0,100)][random.randrange(0,100)][0]
+    RandomTile = MainGrid[random.randrange(30,70)][random.randrange(30,70)][0]
 
     if RandomTile.SpriteType != "Water":
         SetPlayerPos = True
         Player.Position = RandomTile.Position
-'''
+
+CameraOffset = (Player.Position[0]-ScreenSize/2+TileSize,Player.Position[1]-ScreenSize/2+TileSize)
 
 # main program loop
 
@@ -390,9 +408,11 @@ while not done:
     Multi = 1
 
     if Player.MovementVector[0] != 0 and Player.MovementVector[1] != 0:
-        Multi = math.pi/4
+        Multi = math.pi/4 # keeps diagonal movement magnitude equal to horizontal
 
     CameraOffset = (CameraOffset[0]+Player.MovementVector[0]*Multi,CameraOffset[1]+Player.MovementVector[1]*Multi)
+
+    # camera stuff making it follow the player
 
     if CameraOffset[0] < 0:
         CameraOffset = (0,CameraOffset[1])
@@ -405,9 +425,27 @@ while not done:
     elif CameraOffset[1] >= tiles * TileSize - ScreenSize:
         CameraOffset = (CameraOffset[0],tiles * TileSize - ScreenSize)
 
+    # making sure player can go back from border
+
+    if Player.Position[0] < ScreenSize/2 - TileSize:
+
+        CameraOffset = (0,CameraOffset[1])
+        
+    elif Player.Position[0] > tiles*TileSize-ScreenSize/2:
+
+        CameraOffset = (tiles*TileSize-ScreenSize,CameraOffset[1])
+
+    if Player.Position[1] < ScreenSize/2-TileSize:
+
+        CameraOffset = (CameraOffset[0],0)
+
+    elif Player.Position[1] > tiles*TileSize-ScreenSize/2:
+
+        CameraOffset = (CameraOffset[0],tiles*TileSize-ScreenSize)
+
     TotalList.update(CameraOffset)
     TotalList.draw(screen)
-    
+
     for row in MainGrid:
         c = 0
         for column in row:
